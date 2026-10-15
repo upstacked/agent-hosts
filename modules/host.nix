@@ -25,8 +25,23 @@ let
       pkgs.git
       pkgs.jq
       pkgs.coreutils
+      pkgs.curl
+      pkgs.util-linux
+      config.systemd.package
     ];
     text = builtins.readFile ../scripts/upagent-update.sh;
+  };
+
+  # A systemd OnCalendar expression; null never reboots.
+  rebootAt = updates.reboot or "Sun 03:00";
+
+  upagent-reboot = pkgs.writeShellApplication {
+    name = "upagent-reboot";
+    runtimeInputs = [
+      pkgs.coreutils
+      config.systemd.package
+    ];
+    text = builtins.readFile ../scripts/upagent-reboot.sh;
   };
 in
 {
@@ -37,6 +52,8 @@ in
   ];
 
   networking.hostName = host.hostname;
+  # Never change this default: every machine whose host.json lacks
+  # stateVersion was installed with it, and changing it migrates their state.
   system.stateVersion = host.stateVersion or "26.05";
 
   hardware.facter.reportPath = lib.mkIf (builtins.pathExists (host.dir + "/facter.json")) (
@@ -47,7 +64,12 @@ in
     enable = true;
     efiSupport = true;
     efiInstallAsRemovable = true;
+    # /boot is a 512M ESP that holds a copy of every generation's kernel.
+    configurationLimit = 10;
   };
+
+  # Evaluating nixpkgs on a small VM during an update can exhaust its memory.
+  zramSwap.enable = true;
 
   services.qemuGuest.enable = true;
 
@@ -67,8 +89,12 @@ in
     extraGroups = [ "wheel" ];
     # Exactly the keys chosen for this machine when it was installed, which
     # may include the Upstacked management key. null, as well as absent, is
-    # none, and then only the console gets in.
+    # none, and then NixOS refuses to build the machine unless it has a
+    # consolePasswordHash.
     openssh.authorizedKeys.keys = if host.sshKeys or null == null then [ ] else host.sshKeys;
+    # The only way in at the console, since root is locked. SSH never accepts
+    # it. Without it, a machine SSH cannot reach is recovered from GRUB.
+    hashedPassword = host.consolePasswordHash or null;
   };
   security.sudo.wheelNeedsPassword = false;
 
@@ -78,6 +104,9 @@ in
       "flakes"
     ];
     trusted-users = [ "@wheel" ];
+    # Collect garbage during builds rather than fail them on a full disk.
+    min-free = 1024 * 1024 * 1024;
+    max-free = 5 * 1024 * 1024 * 1024;
   };
   nix.gc = {
     automatic = true;
@@ -95,7 +124,10 @@ in
     "/var/lib/upagent/secrets".d.mode = "0700";
   };
 
-  environment.systemPackages = [ upagent-update ];
+  environment.systemPackages = [
+    upagent-update
+    upagent-reboot
+  ];
 
   # Pull mode: the VM follows this repository by itself. Push mode runs the
   # same command, when upagent-anywhere asks over SSH.
@@ -114,8 +146,21 @@ in
       OnBootSec = "5m";
       OnUnitActiveSec = updates.interval or "1h";
       RandomizedDelaySec = "10m";
-      Persistent = true;
     };
+  };
+
+  # Switching never boots the new kernel or systemd. In either mode, this
+  # reboots into them in the window host.json names, and only if they changed.
+  systemd.services.upagent-reboot = lib.mkIf (rebootAt != null) {
+    description = "Reboot into a newer kernel or systemd";
+    serviceConfig.Type = "oneshot";
+    path = [ upagent-reboot ];
+    script = "upagent-reboot";
+    restartIfChanged = false;
+  };
+  systemd.timers.upagent-reboot = lib.mkIf (rebootAt != null) {
+    wantedBy = [ "timers.target" ];
+    timerConfig.OnCalendar = rebootAt;
   };
 
   # What upagent-anywhere reads to tell whether a machine is ours, and which

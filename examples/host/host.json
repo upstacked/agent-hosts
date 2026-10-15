@@ -1,13 +1,15 @@
 {
   "hostname": "agent-example",
   "system": "x86_64-linux",
+  "stateVersion": "26.05",
   "disk": "/dev/sda",
-  "sshKeys": [],
+  "sshKeys": ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPlaceholderPlaceholderPlaceholderPlaceho operator@example"],
+  "consolePasswordHash": null,
   "agent": {
     "settings": {
       "mode": "collector",
       "api.url": "https://agent-api.upstacked-staging.sokl.dev"
     }
   },
-  "updates": { "mode": "pull", "interval": "1h" }
+  "updates": { "mode": "pull", "interval": "1h", "reboot": "Sun 03:00" }
 }

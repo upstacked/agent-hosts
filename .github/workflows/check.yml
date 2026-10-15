@@ -10,12 +10,16 @@ permissions:
 
 jobs:
   # Every agent machine in pull mode builds main within the hour, so main has
-  # to build: this builds the example machine end to end, agent included.
+  # to build: this builds the example machine end to end, agent included, on
+  # each architecture the agent is released for.
   check:
-    name: Build the example machine
-    runs-on: ubuntu-latest
+    name: Build the example machine (${{ matrix.runner }})
+    strategy:
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: DeterminateSystems/nix-installer-action@main
-      - uses: DeterminateSystems/magic-nix-cache-action@main
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # v23
+      - uses: DeterminateSystems/magic-nix-cache-action@84c0677f58dcedf3b91f8223ce36a9ea5b3c84b7 # v15
       - run: nix flake check --print-build-logs

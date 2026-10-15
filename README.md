@@ -21,7 +21,8 @@ Here is everything every machine shares:
 | `modules/upstacked-agent.nix` | `services.upstacked-agent`: the agent as a hardened service, configured as `agent.conf` |
 | `modules/host.nix` | SSH as `upstacked` with the keys the machine's `host.json` names, the firewall, Nix, and updates |
 | `modules/disk.nix` | one disk, bootable by BIOS or UEFI |
-| `scripts/upagent-update.sh` | how a machine moves to a newer commit of this repository |
+| `scripts/upagent-update.sh` | how a machine moves to a newer commit of this repository, and rolls back if that leaves it unhealthy |
+| `scripts/upagent-reboot.sh` | how a machine boots the kernel and systemd it was switched to, in its reboot window |
 
 Nothing about any one machine is committed. What is particular to it lives on
 the machine, in `/etc/upagent`, beside a three-line flake that calls
@@ -37,6 +38,22 @@ A commit to `main` reaches every machine in pull mode within its interval (an
 hour by default), and every machine in push mode the next time someone runs
 `upagent-anywhere update` against it. CI builds the example machine on every
 push; do not merge what it cannot build.
+
+A machine that is healthy before an update, but whose agent or SSH is down or
+cannot reach GitHub afterwards, rolls back, and skips that commit from then on.
+`/var/lib/upagent/last-update.json` says what happened, and
+`/var/lib/upagent/rolled-back` lists the commits it skipped.
+
+Switching does not reboot. Each machine reboots in the window its `host.json`
+names (`updates.reboot`, a systemd calendar expression, Sundays at 03:00 by
+default, `null` for never), and only when its kernel or systemd changed.
+
+## Keeping nixpkgs current
+
+nixpkgs reaches the machines only through this repository's `flake.lock`. A
+workflow opens a pull request updating it every Monday; merge it. Each NixOS
+release is supported for about seven months, so move `flake.nix` to the next
+one before the current one's end of life: `nixos-26.05` ends on 2026-12-31.
 
 To move every machine to a new agent:
 
