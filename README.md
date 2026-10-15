@@ -19,7 +19,7 @@ Here is everything every machine shares:
 |---|---|
 | `pkgs/upstacked-agent.nix` | the agent, as released, pinned by hash |
 | `modules/upstacked-agent.nix` | `services.upstacked-agent`: the agent as a hardened service, configured as `agent.conf` |
-| `modules/host.nix` | SSH as `upstacked` with the keys in `keys/`, the firewall, Nix, and updates |
+| `modules/host.nix` | SSH as `upstacked` with the keys the machine's `host.json` names, the firewall, Nix, and updates |
 | `modules/disk.nix` | one disk, bootable by BIOS or UEFI |
 | `scripts/upagent-update.sh` | how a machine moves to a newer commit of this repository |
 
@@ -27,7 +27,9 @@ Nothing about any one machine is committed. What is particular to it lives on
 the machine, in `/etc/upagent`, beside a three-line flake that calls
 `lib.mkHost` on it. See `examples/host/host.json` for its shape. That is why
 this repository can be public: machines that update themselves read it with
-no credentials, and it holds no secrets.
+no credentials, and it holds no secrets. That includes SSH keys: who may log
+in to a machine is chosen when it is installed, and written to its
+`host.json`, not granted to every machine from here.
 
 ## Changing every machine at once
 

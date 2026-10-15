@@ -1,5 +1,6 @@
-# What every agent VM is: reachable over SSH by the fleet's keys, running the
-# agent as its host.json says, and updated from this repository either on a
+# What every agent VM is: reachable over SSH by the keys its host.json names,
+# running the
+# agent as host.json says, and updated from this repository either on a
 # timer or when upagent-anywhere asks.
 #
 # Nothing here is per host. A VM's own facts live on the VM, in /etc/upagent,
@@ -14,14 +15,6 @@
 }:
 
 let
-  fleetKeys = lib.pipe (builtins.readDir ../keys) [
-    (lib.filterAttrs (name: type: type == "regular" && lib.hasSuffix ".pub" name))
-    builtins.attrNames
-    (map (name: builtins.readFile (../keys + "/${name}")))
-    (lib.concatMap (lib.splitString "\n"))
-    (builtins.filter (line: line != "" && !lib.hasPrefix "#" line))
-  ];
-
   updates = host.updates or { };
   pull = (updates.mode or "push") == "pull";
 
@@ -73,8 +66,10 @@ in
     isNormalUser = true;
     description = "Operators, through upagent-anywhere";
     extraGroups = [ "wheel" ];
-    # null, as well as absent, is no keys beyond the fleet's.
-    openssh.authorizedKeys.keys = fleetKeys ++ (if host.sshKeys or null == null then [ ] else host.sshKeys);
+    # Exactly the keys chosen for this machine when it was installed, which
+    # may include the Upstacked management key. null, as well as absent, is
+    # none, and then only the console gets in.
+    openssh.authorizedKeys.keys = if host.sshKeys or null == null then [ ] else host.sshKeys;
   };
   security.sudo.wheelNeedsPassword = false;
 
