@@ -1,7 +1,6 @@
 # What every agent VM is: reachable over SSH by the keys its host.json names,
-# running the
-# agent as host.json says, and updated from this repository either on a
-# timer or when upagent-anywhere asks.
+# running the agent as host.json says, and updated from this repository either
+# on a timer or when upagent-anywhere asks.
 #
 # Nothing here is per host. A VM's own facts live on the VM, in /etc/upagent,
 # and reach this module as `host`.
