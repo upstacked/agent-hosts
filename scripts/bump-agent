@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# scripts/bump-agent <version>
+#
+# Points pkgs/upstacked-agent.nix at a release of upstacked/agent-releases,
+# with the hashes from that release's checksums.txt.
+set -euo pipefail
+version=${1:?usage: scripts/bump-agent <version, e.g. 0.3.1>}
+version=${version#v}
+file=pkgs/upstacked-agent.nix
+sums=$(curl -fsSL "https://github.com/upstacked/agent-releases/releases/download/v$version/checksums.txt")
+
+sri() {
+  local hex
+  hex=$(awk -v f="upstacked-agent_${version}_$1.tar.gz" '$2 == f { print $1 }' <<<"$sums")
+  [ -n "$hex" ] || { echo "bump-agent: v$version has no $1 archive" >&2; exit 1; }
+  nix hash convert --hash-algo sha256 --to sri "$hex"
+}
+amd64=$(sri linux_amd64)
+arm64=$(sri linux_arm64)
+
+sed -i.bak \
+  -e "s|version = \"[^\"]*\";|version = \"$version\";|" \
+  -e "/linux_amd64/{n;s|hash = \"[^\"]*\";|hash = \"$amd64\";|;}" \
+  -e "/linux_arm64/{n;s|hash = \"[^\"]*\";|hash = \"$arm64\";|;}" \
+  "$file"
+rm -f "$file.bak"
+git diff --stat "$file"

@@ -37,9 +37,15 @@ fail() {
 }
 
 if [ -n "$rev" ]; then
-  url=$(jq -r '.nodes.fleet.original.url // empty' "$flake/flake.lock")
-  [ -n "$url" ] || url="https://sokkel.dev/upstacked/agent-hosts.git"
-  nix flake lock "$flake" --override-input fleet "git+${url%%\?*}?rev=$rev" ||
+  # Pinned the way flake.nix names agent-hosts, so the lock keeps following
+  # the same repository afterwards.
+  original=$(jq -c '.nodes.fleet.original' "$flake/flake.lock")
+  case "$(jq -r .type <<<"$original")" in
+    github) pinned="github:$(jq -r '.owner + "/" + .repo' <<<"$original")/$rev" ;;
+    git) pinned="git+$(jq -r .url <<<"$original")?rev=$rev" ;;
+    *) fail "agent-hosts is locked as $(jq -r .type <<<"$original"), which cannot be pinned" ;;
+  esac
+  nix flake lock "$flake" --override-input fleet "$pinned" ||
     fail "could not lock agent-hosts at $rev"
 else
   nix flake update fleet --flake "$flake" || fail "could not fetch agent-hosts"

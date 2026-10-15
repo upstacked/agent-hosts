@@ -1,0 +1,21 @@
+name: Check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  # Every agent machine in pull mode builds main within the hour, so main has
+  # to build: this builds the example machine end to end, agent included.
+  check:
+    name: Build the example machine
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+      - run: nix flake check --print-build-logs
