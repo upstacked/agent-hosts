@@ -1,0 +1,13 @@
+{
+  "hostname": "agent-example",
+  "system": "x86_64-linux",
+  "disk": "/dev/sda",
+  "sshKeys": [],
+  "agent": {
+    "settings": {
+      "mode": "collector",
+      "api.url": "https://agent-api.upstacked-staging.sokl.dev"
+    }
+  },
+  "updates": { "mode": "pull", "interval": "1h" }
+}
