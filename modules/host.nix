@@ -129,8 +129,8 @@ in
     upagent-reboot
   ];
 
-  # Pull mode: the VM follows this repository by itself. Push mode runs the
-  # same command, when upagent-anywhere asks over SSH.
+  # Pull mode: the VM follows its branch of this repository by itself. Push
+  # mode runs the same command, when upagent-anywhere asks over SSH.
   systemd.services.upagent-update = lib.mkIf pull {
     description = "Update this machine from agent-hosts";
     after = [ "network-online.target" ];

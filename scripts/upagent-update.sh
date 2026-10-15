@@ -1,21 +1,23 @@
 # upagent-update [--rev <commit>]
 #
-# Moves this machine to the latest agent-hosts, or to <commit>, and switches to
+# Moves this machine to the head of the agent-hosts branch its host.json
+# follows (updates.branch, stable by default), or to <commit>, and switches to
 # it. The pull timer runs it, and so does upagent-anywhere over SSH, so both
 # paths leave the same record in /var/lib/upagent/last-update.json.
 #
 # A switch that leaves the agent or SSH down, or GitHub unreachable, is rolled
-# back, and that revision is skipped until a newer one, or --rev, asks for it.
+# back, and that commit is skipped until a newer one, or --rev, asks for it.
 # A machine that was already unhealthy before the switch is not rolled back.
 
 flake=/etc/upagent
 status=/var/lib/upagent/last-update.json
 rejected=/var/lib/upagent/rolled-back
 rev=""
+explicit=false
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --rev) rev="$2"; shift 2 ;;
+    --rev) rev="$2"; explicit=true; shift 2 ;;
     *) echo "upagent-update: unknown argument $1" >&2; exit 2 ;;
   esac
 done
@@ -69,23 +71,34 @@ healthy 1 && was_healthy=true
 
 cp "$flake/flake.lock" "$flake/flake.lock.previous"
 
-if [ -n "$rev" ]; then
-  # Pinned the way flake.nix names agent-hosts, so the lock keeps following
-  # the same repository afterwards.
-  original=$(jq -c '.nodes.fleet.original' "$flake/flake.lock")
-  case "$(jq -r .type <<<"$original")" in
-    github) pinned="github:$(jq -r '.owner + "/" + .repo' <<<"$original")/$rev" ;;
-    git) pinned="git+$(jq -r .url <<<"$original")?rev=$rev" ;;
-    *) fail "agent-hosts is locked as $(jq -r .type <<<"$original"), which cannot be pinned" ;;
-  esac
-  nix flake lock "$flake" --override-input fleet "$pinned" ||
-    fail "could not lock agent-hosts at $rev"
-else
-  nix flake update fleet --flake "$flake" || fail "could not fetch agent-hosts"
+# Pinned the way flake.nix names agent-hosts: the lock keeps flake.nix's
+# reference as its original, so it stays the same repository afterwards.
+original=$(jq -c '.nodes.fleet.original' "$flake/flake.lock")
+case "$(jq -r .type <<<"$original")" in
+  github)
+    repo=$(jq -r '.owner + "/" + .repo' <<<"$original")
+    remote="https://github.com/$repo.git"
+    pin="github:$repo/"
+    ;;
+  git)
+    remote=$(jq -r .url <<<"$original")
+    pin="git+$remote?rev="
+    ;;
+  *) fail "agent-hosts is locked as $(jq -r .type <<<"$original"), which cannot be pinned" ;;
+esac
+
+if [ -z "$rev" ]; then
+  branch=$(jq -r '.updates.branch // "stable"' "$flake/host.json")
+  rev=$(git ls-remote "$remote" "refs/heads/$branch" | cut -f1) ||
+    fail "could not fetch agent-hosts"
+  [ -n "$rev" ] || fail "agent-hosts has no branch $branch"
 fi
+
+nix flake lock "$flake" --override-input fleet "$pin$rev" ||
+  fail "could not lock agent-hosts at $rev"
 target=$(locked)
 
-if [ -z "$rev" ] && [ -n "$target" ] && grep -qxF "$target" "$rejected" 2>/dev/null; then
+if [ "$explicit" = false ] && grep -qxF "$target" "$rejected" 2>/dev/null; then
   mv "$flake/flake.lock.previous" "$flake/flake.lock"
   fail "agent-hosts $target was rolled back here before; waiting for a newer commit"
 fi

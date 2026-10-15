@@ -1,0 +1,58 @@
+name: Promote to stable
+
+on:
+  schedule:
+    - cron: "0 8 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: Commit on main to promote now, skipping the wait
+        required: false
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  # Canary machines follow main; every other machine follows stable. This
+  # moves stable to the newest commit on main that the canaries have run for
+  # a day and that CI built, on weekdays, when someone is around to notice.
+  promote:
+    name: Promote to stable
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+      COMMIT: ${{ inputs.commit }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Promote
+        run: |
+          built() {
+            gh run list --workflow check.yml --commit "$1" --status success --json databaseId --jq length | grep -qv '^0$'
+          }
+
+          if [ -n "$COMMIT" ]; then
+            candidate=$(git rev-parse --verify "$COMMIT^{commit}")
+            git merge-base --is-ancestor "$candidate" origin/main || { echo "$COMMIT is not on main" >&2; exit 1; }
+            built "$candidate" || { echo "CI has not built $COMMIT" >&2; exit 1; }
+          else
+            candidate=""
+            # Commits pushed together get one CI run, on the last of them.
+            for c in $(git rev-list --max-count=50 --until="24 hours ago" origin/main); do
+              if built "$c"; then candidate=$c; break; fi
+            done
+            [ -n "$candidate" ] || { echo "nothing on main is old enough and built"; exit 0; }
+          fi
+
+          stable=$(git rev-parse origin/stable)
+          if [ "$candidate" = "$stable" ] || git merge-base --is-ancestor "$candidate" "$stable"; then
+            echo "stable already has $candidate"
+            exit 0
+          fi
+          git merge-base --is-ancestor "$stable" "$candidate" || { echo "stable has diverged from main" >&2; exit 1; }
+
+          git push origin "$candidate:refs/heads/stable"
+          echo "stable: $stable -> $candidate"
+          git log --oneline "$stable..$candidate"

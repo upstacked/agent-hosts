@@ -11,5 +11,5 @@
       "api.url": "https://agent-api.upstacked-staging.sokl.dev"
     }
   },
-  "updates": { "mode": "pull", "interval": "1h", "reboot": "Sun 03:00" }
+  "updates": { "mode": "pull", "branch": "stable", "interval": "1h", "reboot": "Sun 03:00" }
 }
