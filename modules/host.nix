@@ -73,7 +73,8 @@ in
     isNormalUser = true;
     description = "Operators, through upagent-anywhere";
     extraGroups = [ "wheel" ];
-    openssh.authorizedKeys.keys = fleetKeys ++ (host.sshKeys or [ ]);
+    # null, as well as absent, is no keys beyond the fleet's.
+    openssh.authorizedKeys.keys = fleetKeys ++ (if host.sshKeys or null == null then [ ] else host.sshKeys);
   };
   security.sudo.wheelNeedsPassword = false;
 
